@@ -54,7 +54,7 @@ def availability(players: pd.DataFrame) -> pd.Series:
     return avail.clip(0, 1)
 
 
-def project_points(data: dict, horizon: int = 5, form_weight: float = 0.5,
+def project_points(data: dict, horizon: int = 5, form_weight: float = 0.3,
                    start_gw: int | None = None) -> pd.DataFrame:
     """Add xp_gw{N} columns and xp_total over the next ``horizon`` gameweeks."""
     players = data["players"].copy()

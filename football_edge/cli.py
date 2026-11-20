@@ -99,7 +99,7 @@ def _print_plan(plan: fpl.Plan, gw_cols: list[str]):
 
 def cmd_fpl_draft(args):
     d = _fpl_data(args)
-    proj = fpl.project_points(d, horizon=args.horizon)
+    proj = fpl.project_points(d, horizon=args.horizon, form_weight=args.form_weight)
     plan = fpl.optimise(proj, budget=args.budget, bench_weight=args.bench_weight)
     _print_plan(plan, proj.attrs["gw_cols"])
     _print_fpl_context(d, args)
@@ -107,7 +107,7 @@ def cmd_fpl_draft(args):
 
 def cmd_fpl_transfers(args):
     d = _fpl_data(args)
-    proj = fpl.project_points(d, horizon=args.horizon)
+    proj = fpl.project_points(d, horizon=args.horizon, form_weight=args.form_weight)
     gw = fpl.next_gameweek(d["events"])
     picks = data.load_fpl_entry(args.entry, gw - 1)
     current = [p["element"] for p in picks["picks"]]
@@ -187,6 +187,8 @@ def build_parser() -> argparse.ArgumentParser:
                           ("fpl-transfers", cmd_fpl_transfers, "transfer plan for your team")):
         s = sub.add_parser(name, help=hlp)
         s.add_argument("--horizon", type=int, default=5)
+        s.add_argument("--form-weight", type=float, default=0.3,
+                       help="weight of recent FPL form vs season points-per-game (0..1)")
         s.add_argument("--refresh", action="store_true")
         if name == "fpl-draft":
             s.add_argument("--budget", type=float, default=100.0)
