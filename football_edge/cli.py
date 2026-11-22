@@ -170,7 +170,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--match", nargs="+", help="pairs: HOME AWAY [HOME AWAY ...]")
     s.add_argument("--odds", type=float, nargs="+", help="bookmaker H D A odds per match")
     s.add_argument("--ratings", action="store_true")
-    s.add_argument("--xi", type=float, default=0.0019)
+    s.add_argument("--xi", type=float, default=0.003)
     s.set_defaults(func=cmd_predict)
 
     s = sub.add_parser("backtest", help="walk-forward model evaluation and value-bet backtest")
@@ -179,7 +179,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--book", default="avg", choices=["avg", "max", "b365", "ps", "psc"])
     s.add_argument("--min-edge", type=float, default=0.03)
     s.add_argument("--blend", type=float, default=0.0, help="mix with market probs (0..1)")
-    s.add_argument("--xi", type=float, default=0.0019)
+    s.add_argument("--xi", type=float, default=0.003)
     s.add_argument("--show", type=int, default=0)
     s.set_defaults(func=cmd_backtest)
 

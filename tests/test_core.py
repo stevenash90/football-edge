@@ -161,3 +161,31 @@ def test_fixture_ticker(fpl_proj):
     d, _ = fpl_proj
     t = fpl.fixture_ticker(d, horizon=4)
     assert len(t) == 20 and t.avg_fdr.is_monotonic_increasing
+
+
+def test_promoted_team_gets_new_spell_and_prior():
+    m, _ = sample.synthetic_matches(seasons=3, seed=4)
+    seasons = model.season_of(m.date)
+    last = seasons.max()
+    # TeamT is absent the season before last (relegated, then promoted back)
+    m = m[~((seasons == last - 1) & ((m.home == "TeamT") | (m.away == "TeamT")))]
+    # NewFC replaces nobody: first match ever in the last season
+    first_last = m[model.season_of(m.date) == last].date.min()
+    dc = model.DixonColes().fit(m, as_of=first_last - pd.Timedelta(days=1))
+    assert "TeamT" + model.OLD_SUFFIX in dc.attack           # old spell kept separately
+    assert "TeamT" not in dc.attack                          # no matches in the new spell yet
+    lam, mu = dc.expected_goals("TeamA", "TeamT", allow_new=True)
+    assert lam > mu
+    assert dc.expected_goals("TeamA", "NewFC", allow_new=True)[0] == pytest.approx(lam)
+    with pytest.raises(KeyError):
+        dc.predict("TeamA", "NewFC")                         # strict by default
+    assert "TeamT" + model.OLD_SUFFIX not in dc.ratings().index
+
+
+def test_shots_on_target_component_runs(matches):
+    m, _ = matches
+    m = m.assign(h_sot=m.hg * 3 + 1, a_sot=m.ag * 3 + 1)
+    a = model.DixonColes(sot_weight=0.0).fit(m)
+    b = model.DixonColes(sot_weight=0.5).fit(m)
+    assert a._opt.success and b._opt.success
+    assert a.predict("TeamA", "TeamT")["p_home"] != b.predict("TeamA", "TeamT")["p_home"]

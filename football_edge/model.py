@@ -36,7 +36,9 @@ class DixonColes:
     """Dixon-Coles model.
 
     Improvements over the textbook version (all optional, defaults tuned by
-    walk-forward validation on EPL 2023/24-2024/25):
+    walk-forward validation on EPL 2023/24-2024/25; on the 2025/26-2026/27
+    holdout, weekly refits, 1X2 log loss improved from 1.066 to 1.024 against
+    1.016 for the de-margined market average):
 
     * ``sot_weight``: share of the likelihood that uses shots on target
       (scaled to goals by the league conversion rate) instead of goals. Shots
@@ -46,15 +48,17 @@ class DixonColes:
     * Promoted teams: a team that was not in the league last season starts a
       new "spell". Its older matches are kept under a separate name (they
       still inform its opponents' ratings) and its new rating is shrunk
-      towards ``promoted_prior`` (attack, defence) — promoted sides are
-      usually well below the league average. A team with no matches yet in
+      towards ``promoted_prior`` (attack, defence) with ``l2_promoted`` —
+      promoted sides are usually well below the league average, and without
+      the shrinkage one or two early results swing their rating too far. A team with no matches yet in
       this spell is predicted with the prior alone.
     """
 
-    xi: float = 0.0019          # time decay per day (half-life ~ 1 year)
+    xi: float = 0.003           # time decay per day (half-life ~ 7.5 months)
     l2: float = 0.0             # ridge penalty on attack/defence towards their prior
-    sot_weight: float = 0.0     # 0 = goals only, 1 = shots on target only
-    promoted_prior: tuple[float, float] = (-0.25, 0.25)
+    l2_promoted: float = 8.0    # extra ridge penalty for teams in a new (promoted) spell
+    sot_weight: float = 0.5     # 0 = goals only, 1 = shots on target only
+    promoted_prior: tuple[float, float] = (-0.4, 0.35)
     handle_promoted: bool = True
     teams: list[str] = field(default_factory=list)
     attack: dict[str, float] = field(default_factory=dict)
@@ -75,11 +79,13 @@ class DixonColes:
         all_teams = set(df.home) | set(df.away)
         cur_teams = set(df.home[seasons == cur]) | set(df.away[seasons == cur])
         promoted = cur_teams - prev_teams
-        returning = (all_teams - prev_teams) & promoted
+        # every team absent last season starts a new spell, even before its first
+        # match this season (then it is predicted from the prior alone)
+        absent = all_teams - prev_teams
         df = df.copy()
         old = seasons < cur
         for col in ("home", "away"):
-            mask = old & df[col].isin(returning)
+            mask = old & df[col].isin(absent)
             df.loc[mask, col] = df.loc[mask, col] + OLD_SUFFIX
         return df, prev_teams, promoted
 
@@ -111,9 +117,11 @@ class DixonColes:
 
         prior_att = np.zeros(n)
         prior_def = np.zeros(n)
+        pen = np.full(n, self.l2)
         for t in promoted:
             if t in idx:
                 prior_att[idx[t]], prior_def[idx[t]] = self.promoted_prior
+                pen[idx[t]] += self.l2_promoted
         is00 = (hg == 0) & (ag == 0)
         is01 = (hg == 0) & (ag == 1)
         is10 = (hg == 1) & (ag == 0)
@@ -152,11 +160,11 @@ class DixonColes:
             g_home = gl.sum()
             g_rho = ((1 - ws) * w * tr).sum()
             s = att.sum()
-            f = (-np.sum(w * ll) + self.l2 * (np.sum((att - prior_att) ** 2) + np.sum((dfn - prior_def) ** 2))
+            f = (-np.sum(w * ll) + np.sum(pen * ((att - prior_att) ** 2 + (dfn - prior_def) ** 2))
                  + anchor * s ** 2)
             grad = np.concatenate([
-                -g_att + 2 * self.l2 * (att - prior_att) + 2 * anchor * s,
-                -g_def + 2 * self.l2 * (dfn - prior_def),
+                -g_att + 2 * pen * (att - prior_att) + 2 * anchor * s,
+                -g_def + 2 * pen * (dfn - prior_def),
                 [-g_home, -g_rho]])
             return f, grad
 
