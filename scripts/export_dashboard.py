@@ -101,11 +101,13 @@ def main():
     mk = wf.dropna(subset=["odds_h_avg"])
     imp = mk[["odds_h_avg", "odds_d_avg", "odds_a_avg"]].apply(
         lambda x: pd.Series(odds.remove_margin(x.values), index=["p_home", "p_draw", "p_away"]), axis=1)
+    wf_old = model.walk_forward(allm, start, xi=0.0019, sot_weight=0.0, handle_promoted=False, l2_promoted=0.0)
     bets = odds.value_bets(wf, min_edge=0.05)
     bt = odds.backtest(bets, "flat")
     write(out, "backtest", pd.DataFrame([{
         "from": start.strftime("%Y-%m-%d"), "matches": len(wf),
         "model_logloss": model.log_loss_1x2(wf),
+        "old_model_logloss": model.log_loss_1x2(wf_old),
         "market_logloss": model.log_loss_1x2(pd.concat([mk[["result"]], imp], axis=1)),
         "bets": bt.get("bets", 0), "hit_rate": bt.get("hit_rate"), "roi": bt.get("roi")}]), fd_in)
 
